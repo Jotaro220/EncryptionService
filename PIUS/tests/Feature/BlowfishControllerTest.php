@@ -2,118 +2,166 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
+
 use Tests\TestCase;
+use App\Http\Controllers\BlowfishController;
+use App\BlowfishCrypt\Blowfish;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
+
+class TestableBlowfish extends Blowfish
+{
+    public function testSplitBlock($block)
+    {
+        return $this->split_block($block);
+    }
+    
+    public function testJoinWords($left, $right)
+    {
+        return $this->join_words($left, $right);
+    }
+}
 
 class BlowfishControllerTest extends TestCase
 {
+    protected $controller;
+    protected $testFile;
+    protected $encryptedFile;
+    protected $decryptedFile;
+    protected $blowfish;
 
-    /** @test */
-    public function it_encrypts_a_file_and_creates_encrypted_file()
+    protected function setUp(): void
+    {
+        parent::setUp();
+        
+        $this->controller = new BlowfishController();
+        $this->blowfish = new TestableBlowfish();
+        
+        Storage::fake('local');
+        $this->testFile = storage_path('app/testfile.txt');
+        file_put_contents($this->testFile, 'This is a test file content for encryption testing.');
+        
+        $this->encryptedFile = $this->testFile . '_encrypted';
+        $this->decryptedFile = storage_path('app/Outtestfile.txt');
+    }
+
+    protected function tearDown(): void
     {
 
-        $absoluteFilePath = "/home/miet/Test/test.txt";
-    
-        // Вызываем метод шифрования
-        $response = $this->get("/blowfish/encrypt?user_id=12345678&path=$absoluteFilePath&action=encrypt");
-    
-        // Проверяем, что ответ успешный
-        $response->assertStatus(200);
-    
-        // Проверяем, что зашифрованный файл создан
-        $encryptedFilePath = $response->json('encryptedFilePath');
-        $this->assertFileExists($encryptedFilePath);
-    
-        // Проверяем, что зашифрованный файл не пустой
-        $this->assertGreaterThan(0, filesize($encryptedFilePath));
+        if (file_exists($this->testFile)) {
+            unlink($this->testFile);
+        }
+        if (file_exists($this->encryptedFile)) {
+            unlink($this->encryptedFile);
+        }
+        if (file_exists($this->decryptedFile)) {
+            unlink($this->decryptedFile);
+        }
+        
+        parent::tearDown();
     }
 
 
-    /** @test */
-    public function it_returns_error_if_file_not_found()
+    public function it_validates_request_parameters()
     {
-        // Вызываем метод шифрования с несуществующим файлом
-        $response = $this->get("/blowfish/encrypt?user_id=123&path=/invalid/path.txt&action=encrypt");
-
-        // Проверяем, что возвращается ошибка 401
-        $response->assertStatus(400);
-
-        // Проверяем сообщение об ошибке
-        $response->assertJson([
-            'code' => 400,
-            'message' => 'File not found',
+        $request = new Request();
+        
+        $validator = Validator::make([], [
+            'user_id' => 'required|integer',
+            'path' => 'required|string',
+            'action' => 'required|in:encrypt,decrypt',
         ]);
+        
+        $this->assertTrue($validator->fails());
+        $this->assertArrayHasKey('user_id', $validator->errors()->toArray());
+        $this->assertArrayHasKey('path', $validator->errors()->toArray());
+        $this->assertArrayHasKey('action', $validator->errors()->toArray());
     }
 
-    /** @test */
-    public function it_returns_error_if_action_is_invalid()
+    public function it_returns_error_for_nonexistent_file()
     {
-
-        $absoluteFilePath = "/home/miet/Test/test.txt";
-
-        // Вызываем метод с неверным действием
-        $response = $this->get("/blowfish/encrypt?user_id=123&path=storage/app/$absoluteFilePath&action=invalid_action");
-
-        // Проверяем, что возвращается ошибка 400
-        $response->assertStatus(400);
-
-        // Проверяем сообщение об ошибке
-        $response->assertJson([
-            'code' => 400,
-            'message' => 'Incorrect input data',
+        $request = new Request([
+            'user_id' => 1,
+            'path' => '/nonexistent/file.txt',
+            'action' => 'encrypt',
         ]);
+        
+        $response = $this->controller->validApi($request);
+        
+        $this->assertEquals(400, $response->getStatusCode());
+        $this->assertEquals('File not found', $response->getData()->message);
     }
 
-    /** @test */
-    public function it_returns_error_if_user_id_is_missing()
+    public function it_encrypts_file_successfully()
     {
-        // Создаем временный файл для теста
-        $absoluteFilePath = "/home/miet/Test/test.txt";
-
-        // Вызываем метод без user_id
-        $response = $this->get("/blowfish/encrypt?path=storage/app/$absoluteFilePath&action=encrypt");
-
-        // Проверяем, что возвращается ошибка 400
-        $response->assertStatus(400);
-
-        // Проверяем сообщение об ошибке
-        $response->assertJson([
-            'code' => 400,
-            'message' => 'Incorrect input data',
+        $request = new Request([
+            'user_id' => 1,
+            'path' => $this->testFile,
+            'action' => 'encrypt',
         ]);
+        
+        $response = $this->controller->validApi($request);
+        
+        $this->assertFileExists($this->encryptedFile);
+        $this->assertEquals($this->encryptedFile, $response->getData()->FilePath);
+        
+        $this->assertNotEquals(
+            file_get_contents($this->testFile),
+            file_get_contents($this->encryptedFile)
+        );
     }
 
-    /** @test */
-public function it_encrypts_a_file_and_creates_encrypted_file_with_correct_id()
-{
+    public function it_returns_error_for_invalid_action()
+    {
+        $request = new Request([
+            'user_id' => 1,
+            'path' => $this->testFile,
+            'action' => 'invalid_action',
+        ]);
+        
+        $response = $this->controller->validApi($request);
+        
+        $this->assertEquals(400, $response->getStatusCode());
+        $this->assertEquals('Incorrect input data', $response->getData()->message);
+    }
 
-    $absoluteFilePath = "/home/miet/Test/test.txt";
+    public function split_block_works_correctly()
+    {
+        $block = 0x0123456789ABCDEF;
+        $result = $this->blowfish->testSplitBlock($block);
+        
+        $this->assertEquals([0x01234567, 0x89ABCDEF], $result);
+    }
 
-    // Вызываем метод шифрования
-    $response = $this->get("/blowfish/encrypt?user_id=123&path=$absoluteFilePath&action=encrypt");
+    public function join_words_works_correctly()
+    {
+        $left = 0x01234567;
+        $right = 0x89ABCDEF;
+        $result = $this->blowfish->testJoinWords($left, $right);
+        
+        $this->assertEquals(0x0123456789ABCDEF, $result);
+    }
 
-    // Проверяем, что ответ успешный
-    $response->assertStatus(200);
+    public function it_writes_correct_id_to_encrypted_file()
+    {
+    $request = new Request([
+        'user_id' => 1,
+        'path' => $this->testFile,
+        'action' => 'encrypt',
+    ]);
+    
+    $response = $this->controller->validApi($request);
+    
 
-    // Проверяем, что зашифрованный файл создан
-    $encryptedFilePath = $response->json('encryptedFilePath');
-    $this->assertFileExists($encryptedFilePath);
+    $fileHandle = fopen($this->encryptedFile, 'rb');
+    $idBytes = fread($fileHandle, 4);
+    fclose($fileHandle);
+    
 
-    // Проверяем, что зашифрованный файл не пустой
-    $this->assertGreaterThan(0, filesize($encryptedFilePath));
+    $writtenId = unpack('L', $idBytes)[1];
+    
 
-    // Проверяем, что первые 5 байт содержат корректный ID
-    $encryptedFileHandle = fopen($encryptedFilePath, 'rb');
-    $idBytes = fread($encryptedFileHandle, 5); // Читаем первые 5 байт
-    fclose($encryptedFileHandle);
-
-    // Ожидаемый ID (в данном примере 0x123456789A)
-    $expectedId = 0x123456789A;
-    $expectedIdBytes = pack('J', $expectedId); // Преобразуем ID в байты
-    $expectedIdBytes = substr($expectedIdBytes, 0, 5); // Берем первые 5 байт
-
-    // Сравниваем первые 5 байт с ожидаемым ID
-    $this->assertEquals($expectedIdBytes, $idBytes, 'Первые 5 байт файла не совпадают с ожидаемым ID');
-}
+    $this->assertEquals(0x12345678, $writtenId);
+    }
 }

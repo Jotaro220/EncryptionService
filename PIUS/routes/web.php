@@ -8,4 +8,4 @@ Route::get('/', function () {
 });
 
 Route::get('/blowfish/encrypt',
- [BlowfishController::class, 'encrypt']);
+ [BlowfishController::class, 'validApi']);
