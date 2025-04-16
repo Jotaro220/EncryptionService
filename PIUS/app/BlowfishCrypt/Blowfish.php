@@ -315,6 +315,13 @@ class Blowfish
         return $this->join_words($left, $right);
     }
 
+    private function decrypt_block($block, $P, $S) {
+        list($left, $right) = $this->split_block($block);
+        $P_reversed = array_reverse($P);
+        list($left, $right) = $this->blowfish_round($left, $right, $P_reversed, $S);
+        return $this->join_words($left, $right);
+    }
+
     private function generate_subkeys($key, $P, $S) {
         $key_bytes = array_values(unpack('C*', $key));
         $key_length = count($key_bytes);
@@ -356,6 +363,12 @@ class Blowfish
         return $data . str_repeat(chr($padding_length), $padding_length);
     }
 
+    protected function unpad($data) {
+        $padding_length = ord(substr($data, -1));
+        return substr($data, 0, -$padding_length);
+    }
+
+
     private function readBlock($handle) {
         $block = fread($handle, 8);
         if ($block === false || strlen($block) === 0) {
@@ -394,6 +407,59 @@ class Blowfish
         fclose($inputHandle);
         fclose($outputHandle);
 
+        return $outputFile;
+    }
+
+    private function createOutFile($inputFile){
+        $lastPos = strrpos($inputFile, "/");
+
+        if ($lastPos !== false) {
+            $newString = substr_replace($inputFile, "Out", $lastPos + 1, 0);
+        } else {
+            $newString = "Out".$inputFile;
+        }
+        return str_replace('_encrypted', '', $newString);;
+    } 
+
+    public function decryptFile($inputFile) {
+        $inputHandle = fopen($inputFile, 'rb');
+        $data = fread($inputHandle, 4);
+        $id = unpack('L', $data)[1];
+
+        $key = "mysecretkey"; //Здесь по id делается запрос к микросервису с ключами
+        list($P, $S) = $this->generate_subkeys($key, $this->P, $this->S);
+
+
+        $outputFile = $this->createOutFile($inputFile);
+        $outputHandle = fopen($outputFile, 'wb');
+
+        $filesize = filesize($inputFile) - 4;
+        $processed = 0;
+
+        while (($block = $this->readBlock($inputHandle)) !== false) {
+            if ($block === false) break;
+
+            $processed += strlen($block);
+            $is_last_block = $processed >= $filesize;
+
+
+            if (strlen($block) < 8) {
+                echo "Неполный блок в зашифрованном файле";
+            }
+
+            $block_int = unpack('J', strrev($block))[1];
+            $decrypted_block = $this->decrypt_block($block_int, $P, $S);
+            $decrypted_data = strrev(pack('J', $decrypted_block));
+
+            if ($is_last_block) {
+                $decrypted_data = $this->unpad($decrypted_data);
+            }
+
+            fwrite($outputHandle, $decrypted_data);
+        }
+
+        fclose($inputHandle);
+        fclose($outputHandle);
         return $outputFile;
     }
 }

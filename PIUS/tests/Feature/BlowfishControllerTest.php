@@ -21,6 +21,14 @@ class TestableBlowfish extends Blowfish
     {
         return $this->join_words($left, $right);
     }
+
+    public function testPad($data, $block_size) {
+        return $this->pad($data, $block_size);
+    }
+
+    public function testUnpad($data) {
+        return $this->unpad($data);
+    }
 }
 
 class BlowfishControllerTest extends TestCase
@@ -112,6 +120,33 @@ class BlowfishControllerTest extends TestCase
         );
     }
 
+    public function it_decrypts_file_successfully()
+    {
+        $encryptRequest = new Request([
+            'user_id' => 1,
+            'path' => $this->testFile,
+            'action' => 'encrypt',
+        ]);
+        $encryptResponse = $this->controller->validApi($encryptRequest);
+        
+        $decryptRequest = new Request([
+            'user_id' => 1,
+            'path' => $this->encryptedFile,
+            'action' => 'decrypt',
+        ]);
+        $decryptResponse = $this->controller->validApi($decryptRequest);
+        
+        $this->assertFileExists($this->decryptedFile);
+        $this->assertEquals($this->decryptedFile, $decryptResponse->getData()->FilePath);
+        
+        $this->assertEquals(
+            file_get_contents($this->testFile),
+            file_get_contents($this->decryptedFile)
+        );
+    }
+
+
+
     public function it_returns_error_for_invalid_action()
     {
         $request = new Request([
@@ -163,5 +198,42 @@ class BlowfishControllerTest extends TestCase
     
 
     $this->assertEquals(0x12345678, $writtenId);
+    }
+
+
+    public function it_reads_correct_id_from_encrypted_file()
+    {
+
+        $encryptRequest = new Request([
+            'user_id' => 1,
+            'path' => $this->testFile,
+            'action' => 'encrypt',
+        ]);
+        $this->controller->validApi($encryptRequest);
+        
+
+        $fileHandle = fopen($this->encryptedFile, 'rb');
+        $idBytes = fread($fileHandle, 4);
+        fclose($fileHandle);
+        
+        $readId = unpack('L', $idBytes)[1];
+        
+
+        $decryptRequest = new Request([
+            'user_id' => 1,
+            'path' => $this->encryptedFile,
+            'action' => 'decrypt',
+        ]);
+        $response = $this->controller->validApi($decryptRequest);
+        
+
+        $this->assertFileExists($this->decryptedFile);
+        $this->assertEquals(
+            file_get_contents($this->testFile),
+            file_get_contents($this->decryptedFile)
+        );
+        
+
+        $this->assertEquals(0x12345678, $readId);
     }
 }

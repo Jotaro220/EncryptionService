@@ -44,7 +44,12 @@ class BlowfishController extends Controller
                 'FilePath' => $encryptedFilePath,
             ]);
         }
-        else {
+        else if ($action === 'decrypt') {
+            $decryptedFilePath = $blowfish->decryptFile($filePath);
+            return response()->json([
+                'FilePath' => $decryptedFilePath,
+            ]);
+        } else {
             return response()->json([
                 'code' => 400,
                 'message' => 'Action is not recognized',
