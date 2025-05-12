@@ -97,7 +97,7 @@ class BlowfishControllerTest extends TestCase
         
         $response = $this->controller->validApi($request);
         
-        $this->assertEquals(400, $response->getStatusCode());
+        $this->assertEquals(404, $response->getStatusCode());
         $this->assertEquals('File not found', $response->getData()->message);
     }
 

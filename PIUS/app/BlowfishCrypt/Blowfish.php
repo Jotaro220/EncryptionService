@@ -377,10 +377,10 @@ class Blowfish
         return $block;
     }
 
-    public function encryptFile($inputFile) {
+    public function encryptFile($inputFile,$userId) {
 
-        $key = "mysecretkey"; // Ключ для шифрованияю После получать от сервера с ключами
-        $id = 0x12345678; // Специальный Id должен получать от сервера с ключами
+        $key = "mysecretkey"; //Запросить ключ у сервера с ключами для файла пользователя   
+        $id = 0x12345678; // Специальный Id должен получать от сервера с ключами для вшития в файл
 
         list($P, $S) = $this->generate_subkeys($key, $this->P, $this->S);
 
@@ -407,7 +407,7 @@ class Blowfish
         fclose($inputHandle);
         fclose($outputHandle);
 
-        return $outputFile;
+        return [$outputFile,200];
     }
 
     private function createOutFile($inputFile){
@@ -421,12 +421,14 @@ class Blowfish
         return str_replace('_encrypted', '', $newString);;
     } 
 
-    public function decryptFile($inputFile) {
+    public function decryptFile($inputFile,$userId) {
         $inputHandle = fopen($inputFile, 'rb');
         $data = fread($inputHandle, 4);
         $id = unpack('L', $data)[1];
 
-        $key = "mysecretkey"; //Здесь по id делается запрос к микросервису с ключами
+
+        //здесь должен быть запрос на сервер с ключами для проверки пользователя и получения ключа
+        $key = "mysecretkey"; //временный ключ
         list($P, $S) = $this->generate_subkeys($key, $this->P, $this->S);
 
 
@@ -460,6 +462,6 @@ class Blowfish
 
         fclose($inputHandle);
         fclose($outputHandle);
-        return $outputFile;
+        return [$outputFile,200];
     }
 }

@@ -16,7 +16,7 @@ class BlowfishController extends Controller
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|integer',
             'path' => 'required|string',
-            'action' => 'required|in:encrypt,decrypt',
+            'action' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -33,22 +33,24 @@ class BlowfishController extends Controller
         $blowfish = new Blowfish();
         if (!file_exists($filePath)) {
             return response()->json([
-                'code' => 400,
-                'message' => 'File not found',
-            ], 400);
+                'code' => 404,
+                'message' => 'File not found. Try again',
+            ], 404);
         }
 
         if ($action === 'encrypt') {
-            $encryptedFilePath = $blowfish->encryptFile($filePath);
+            list($message,$status) = $blowfish->encryptFile($filePath,$userId);
             return response()->json([
-                'FilePath' => $encryptedFilePath,
-            ]);
+                'code' => $status,
+                'FilePath' => $message,
+            ],$status);
         }
         else if ($action === 'decrypt') {
-            $decryptedFilePath = $blowfish->decryptFile($filePath);
+            list($message,$status) = $blowfish->decryptFile($filePath,$userId);
             return response()->json([
-                'FilePath' => $decryptedFilePath,
-            ]);
+                'code' => $status,
+                'FilePath' => $message,
+            ],$status);
         } else {
             return response()->json([
                 'code' => 400,

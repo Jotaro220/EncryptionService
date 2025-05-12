@@ -7,5 +7,5 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/blowfish/encrypt',
+Route::get('/api/v1/blowfish',
  [BlowfishController::class, 'validApi']);
