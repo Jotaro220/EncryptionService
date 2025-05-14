@@ -2,6 +2,8 @@
 
 namespace App\BlowfishCrypt;
 
+use App\Helpers\KeyGeneratorApi;
+
 class Blowfish
 {
     private $P = [
@@ -379,9 +381,14 @@ class Blowfish
 
     public function encryptFile($inputFile,$userId) {
 
-        $key = "mysecretkey"; //Запросить ключ у сервера с ключами для файла пользователя   
-        $id = 0x12345678; // Специальный Id должен получать от сервера с ключами для вшития в файл
+        $result = KeyGeneratorApi::generateKey($userId, basename($inputFile));
+        
+        if(!$result['success']) {
+            return [$result['error']['message'],$result['error']['code']];
+        }
 
+        $key = $result['data']['key'];
+        $id = $result['data']['id']; 
         list($P, $S) = $this->generate_subkeys($key, $this->P, $this->S);
 
         $inputHandle = fopen($inputFile, 'rb');
@@ -411,29 +418,33 @@ class Blowfish
     }
 
     private function createOutFile($inputFile){
-        $lastPos = strrpos($inputFile, "/");
+        $dir = dirname($inputFile);
+        $base = basename($inputFile);
+    
+        $base = str_replace(['_encrypted', '_decoded'], '', $base);
+    
+        return $dir . DIRECTORY_SEPARATOR . "Out_" . $base;
+    }
 
-        if ($lastPos !== false) {
-            $newString = substr_replace($inputFile, "Out", $lastPos + 1, 0);
-        } else {
-            $newString = "Out".$inputFile;
-        }
-        return str_replace('_encrypted', '', $newString);;
-    } 
-
-    public function decryptFile($inputFile,$userId) {
+    public function decryptFile($inputFile,$telegramCode) {
+        
         $inputHandle = fopen($inputFile, 'rb');
         $data = fread($inputHandle, 4);
         $id = unpack('L', $data)[1];
 
 
-        //здесь должен быть запрос на сервер с ключами для проверки пользователя и получения ключа
-        $key = "mysecretkey"; //временный ключ
+        $result = KeyGeneratorApi::getKey($id,$telegramCode);
+        if (!$result['success']){
+            return [$result['error']['message'],$result['error']['code']];
+        }
+        $key = $result['data']['key']; //временный ключ
         list($P, $S) = $this->generate_subkeys($key, $this->P, $this->S);
 
 
         $outputFile = $this->createOutFile($inputFile);
         $outputHandle = fopen($outputFile, 'wb');
+
+        
 
         $filesize = filesize($inputFile) - 4;
         $processed = 0;
@@ -457,7 +468,10 @@ class Blowfish
                 $decrypted_data = $this->unpad($decrypted_data);
             }
 
+
+
             fwrite($outputHandle, $decrypted_data);
+            
         }
 
         fclose($inputHandle);

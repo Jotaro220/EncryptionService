@@ -9,6 +9,10 @@ use App\BlowfishCrypt\Blowfish;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use App\Helpers\KeyGeneratorApi;
+use Illuminate\Support\Facades\Http;
+
+
 
 class TestableBlowfish extends Blowfish
 {
@@ -46,17 +50,29 @@ class BlowfishControllerTest extends TestCase
         $this->controller = new BlowfishController();
         $this->blowfish = new TestableBlowfish();
         
+        
+        Http::fake([
+            'http://127.0.0.1:8000/api/v1/key/generate' => Http::response([
+                'key' => 'mysecretkey',
+                'id' => 1
+            ], 201),
+            
+            'http://127.0.0.1:8000/api/v1/key/get_key' => Http::response([
+                'key' => 'mysecretkey'
+            ], 200)
+        ]);
+
         Storage::fake('local');
         $this->testFile = storage_path('app/testfile.txt');
         file_put_contents($this->testFile, 'This is a test file content for encryption testing.');
         
         $this->encryptedFile = $this->testFile . '_encrypted';
-        $this->decryptedFile = storage_path('app/Outtestfile.txt');
+        $this->decryptedFile = storage_path('app/Out_testfile.txt');
     }
 
     protected function tearDown(): void
     {
-
+        
         if (file_exists($this->testFile)) {
             unlink($this->testFile);
         }
@@ -71,7 +87,7 @@ class BlowfishControllerTest extends TestCase
     }
 
 
-    public function it_validates_request_parameters()
+    public function testValidatesRequestParameters()
     {
         $request = new Request();
         
@@ -87,7 +103,7 @@ class BlowfishControllerTest extends TestCase
         $this->assertArrayHasKey('action', $validator->errors()->toArray());
     }
 
-    public function it_returns_error_for_nonexistent_file()
+    public function testReturnsErrorForNonexistentFile()
     {
         $request = new Request([
             'user_id' => 1,
@@ -101,7 +117,7 @@ class BlowfishControllerTest extends TestCase
         $this->assertEquals('File not found', $response->getData()->message);
     }
 
-    public function it_encrypts_file_successfully()
+    public function testEncryptsFileSuccessfully()
     {
         $request = new Request([
             'user_id' => 1,
@@ -120,7 +136,7 @@ class BlowfishControllerTest extends TestCase
         );
     }
 
-    public function it_decrypts_file_successfully()
+    public function testDecryptsFileSuccessfully()
     {
         $encryptRequest = new Request([
             'user_id' => 1,
@@ -146,8 +162,7 @@ class BlowfishControllerTest extends TestCase
     }
 
 
-
-    public function it_returns_error_for_invalid_action()
+    public function testReturnsErrorForInvalidAction()
     {
         $request = new Request([
             'user_id' => 1,
@@ -158,10 +173,10 @@ class BlowfishControllerTest extends TestCase
         $response = $this->controller->validApi($request);
         
         $this->assertEquals(400, $response->getStatusCode());
-        $this->assertEquals('Incorrect input data', $response->getData()->message);
+        $this->assertEquals('Action is not recognized', $response->getData()->message);
     }
 
-    public function split_block_works_correctly()
+    public function testSplitBlockWorksCorrectly()
     {
         $block = 0x0123456789ABCDEF;
         $result = $this->blowfish->testSplitBlock($block);
@@ -169,7 +184,7 @@ class BlowfishControllerTest extends TestCase
         $this->assertEquals([0x01234567, 0x89ABCDEF], $result);
     }
 
-    public function join_words_works_correctly()
+    public function testJoinWordsWorksCorrectly()
     {
         $left = 0x01234567;
         $right = 0x89ABCDEF;
@@ -178,7 +193,7 @@ class BlowfishControllerTest extends TestCase
         $this->assertEquals(0x0123456789ABCDEF, $result);
     }
 
-    public function it_writes_correct_id_to_encrypted_file()
+    public function testWritesCorrectIdToEncryptedFile()
     {
     $request = new Request([
         'user_id' => 1,
@@ -197,11 +212,10 @@ class BlowfishControllerTest extends TestCase
     $writtenId = unpack('L', $idBytes)[1];
     
 
-    $this->assertEquals(0x12345678, $writtenId);
+    $this->assertEquals(0x1, $writtenId);
     }
 
-
-    public function it_reads_correct_id_from_encrypted_file()
+    public function testReadsCorrectIdFromEncryptedFile()
     {
 
         $encryptRequest = new Request([
@@ -234,6 +248,6 @@ class BlowfishControllerTest extends TestCase
         );
         
 
-        $this->assertEquals(0x12345678, $readId);
+        $this->assertEquals(0x1, $readId);
     }
 }

@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Validator;
 
 class BlowfishController extends Controller
 {
-    
 
     public function validApi(Request $request)
     {
@@ -34,28 +33,33 @@ class BlowfishController extends Controller
         if (!file_exists($filePath)) {
             return response()->json([
                 'code' => 404,
-                'message' => 'File not found. Try again',
+                'message' => 'File not found',
             ], 404);
         }
 
         if ($action === 'encrypt') {
             list($message,$status) = $blowfish->encryptFile($filePath,$userId);
-            return response()->json([
-                'code' => $status,
-                'FilePath' => $message,
-            ],$status);
         }
         else if ($action === 'decrypt') {
             list($message,$status) = $blowfish->decryptFile($filePath,$userId);
-            return response()->json([
-                'code' => $status,
-                'FilePath' => $message,
-            ],$status);
         } else {
             return response()->json([
                 'code' => 400,
                 'message' => 'Action is not recognized',
             ], 400);
+        }
+
+        if($status !== 200){
+            return response()->json([
+                'code' => $status,
+                'message' => $message,
+            ],$status);
+        }
+        else{
+            return response()->json([
+                'code' => $status,
+                'FilePath' => $message,
+            ],$status);
         }
     }
 }
