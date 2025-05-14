@@ -26,7 +26,7 @@ docker-compose up
 ---
 
 ## API документация
-OpenApi документация - 
+[OpenApi документация](./PIUS/docs/CryptFile.yaml)
 ### Основные эндпоинты
 
 #### Шифрование/дешифрование файлов
