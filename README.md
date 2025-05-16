@@ -21,7 +21,7 @@
 ### Локальный запуск без docker
 php artisan serve
 ### Локальный запуск через docker 
-docker-compose up
+docker-compose up --build -d
 
 ---
 
